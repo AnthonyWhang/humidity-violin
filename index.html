@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>关于湿度对小提琴音色影响的CR-DTF对比测试</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px;     flex-direction: column;}
+    fieldset { margin-bottom: 20px; }
+    label, legend { display: block; margin: 5px 0; }
+    button { margin: 5px; padding: 8px 16px; }
+    #trial-box, #feedback-box, #download-box { display: none; margin-top: 20px; width: 90%; max-width: 600px;}
+    #intro {
+    font-size: 1rem;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    color: #333;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>关于湿度对小提琴音色影响的CR-DTF对比测试</h1>
+
+  <div id="intro">
+    <p>在本次测试中，您将听到 10 组小提琴音频。</p>
+    <p>您需要在 A、B 两个选项中，选出您认为与参考音频 X 一致的那个。</p>
+    <p>请您使用耳机或音箱参与测试。</p>
+  </div>
+
+  <!-- 1. 身份信息 -->
+  <div id="info-box">
+    <fieldset>
+      <legend>请填写您的身份信息</legend>
+      <label>姓名：<input type="text" id="participant-name" required></label>
+      <label>年龄：<input type="number" id="participant-age" min="1" required></label>
+      <label>我是：
+        <select id="participant-exp">
+          <option>音频工程师</option>
+          <option>音频专业教师</option>
+          <option>音频专业学生</option>
+          <option>音乐爱好者</option>
+          <option>音乐制作人</option>
+          <option>无相关经验</option>
+        </select>
+      </label>
+      <button id="info-submit">提交并开始实验</button>
+    </fieldset>
+  </div>
+
+  <!-- 2. 实验试次 -->
+  <div id="trial-box">
+    <p>第 <span id="trial-num">1</span> 次：</p>
+    <p>先听 X：<button id="play-x">播放 X</button></p>
+    <p>再听 A / B，并选择哪个和 X 一样：</p>
+    <button id="play-a">播放 A</button>
+    <button id="play-b">播放 B</button><br><br>
+    <button id="choose-a">选择 A</button>
+    <button id="choose-b">选择 B</button>
+  </div>
+
+  <!-- 3. 反馈表单 -->
+  <div id="feedback-box">
+    <fieldset>
+      <legend>实验结束，谢谢参与！</legend>
+
+      <p><strong>1. 您认为本次测试的难度如何？</strong></p>
+      <label><input type="radio" name="difficulty" value="很简单"> 很简单，我有足够的信心区分所有音频</label>
+      <label><input type="radio" name="difficulty" value="一般"> 我能区分其中一些，但我对自己的选择也不抱太大信心</label>
+      <label><input type="radio" name="difficulty" value="很难"> 我完全听不出任何区别</label>
+
+      <p><strong>2. 如果对测试有任何评价，请告诉我。（可选）</strong></p>
+      <textarea id="comment" rows="4" cols="50" placeholder="请写下您的意见…"></textarea><br>
+
+      <button id="feedback-submit">提交反馈并下载结果</button>
+    </fieldset>
+  </div>
+
+  <!-- 4. 下载链接 -->
+  <div id="download-box" style="display: none; margin-top: 20px;">
+    <a id="download-link" href="#" download>点击这里下载结果</a>
+    <p id="send-email" style="display: none; margin-top: 10px;">  
+      请您将结果发送至邮箱：anthonywhang01@gmail.com
+    </p>
+  </div>
+
+  <script>
+    // —— 刺激 & 试次设定 —— 
+    const stimuli = ['v2630Yc.wav','v2575Yc.wav','v2560Yc.wav','v2530Yc.wav','v1375Yc.wav','v1175Yc.wav','v1330Yc.wav','v1130Yc.wav'];
+    const nTrials = 10;
+    const trials = [];
+    (function genTrials(){
+      for(let t=0; t<nTrials; t++){
+        let i,j;
+        do{ i = Math.floor(Math.random()*stimuli.length);
+             j = Math.floor(Math.random()*stimuli.length);
+        }while(i===j);
+        const pick = Math.random()<0.5?'A':'B';
+        trials.push({
+          A: stimuli[i], Aidx: i+1,
+          B: stimuli[j], Bidx: j+1,
+          correct: pick,
+          X: pick==='A'?stimuli[i]:stimuli[j]
+        });
+      }
+    })();
+
+    // —— DOM & 状态 —— 
+    const infoBox      = document.getElementById('info-box');
+    const trialBox     = document.getElementById('trial-box');
+    const feedbackBox  = document.getElementById('feedback-box');
+    const downloadBox  = document.getElementById('download-box');
+
+    const nameInput    = document.getElementById('participant-name');
+    const ageInput     = document.getElementById('participant-age');
+    const expInput     = document.getElementById('participant-exp');
+    const infoBtn      = document.getElementById('info-submit');
+
+    const numSpan      = document.getElementById('trial-num');
+    const playXBtn     = document.getElementById('play-x');
+    const playABtn     = document.getElementById('play-a');
+    const playBBtn     = document.getElementById('play-b');
+    const chooseABtn   = document.getElementById('choose-a');
+    const chooseBBtn   = document.getElementById('choose-b');
+
+    const feedbackBtn  = document.getElementById('feedback-submit');
+    const downloadLink = document.getElementById('download-link');
+    const commentBox   = document.getElementById('comment');
+
+    const audioA = new Audio(), audioB = new Audio(), audioX = new Audio();
+    const allAudios = [audioA, audioB, audioX];
+    function stopAll(){
+      allAudios.forEach(a => { a.pause(); a.currentTime = 0; });
+    }
+
+    let participantInfo = {};
+    let responses = [];
+    let current = 0, correctCount = 0;
+
+    // —— 1. 身份提交 —— 
+    infoBtn.onclick = () => {
+      const name = nameInput.value.trim();
+      const age  = ageInput.value;
+      if(!name||!age){ alert('请填写姓名和年龄。'); return; }
+      participantInfo = { name, age, exp: expInput.value };
+      infoBox.style.display = 'none';
+      trialBox.style.display = 'block';
+      loadTrial();
+    };
+
+    // —— 2. 加载 & 播放 —— 
+    function loadTrial(){
+      const tr = trials[current];
+      numSpan.textContent = current+1;
+      audioA.src = tr.A; audioB.src = tr.B; audioX.src = tr.X;
+    }
+    playXBtn.onclick = ()=>{ stopAll(); audioX.play(); };
+    playABtn.onclick = ()=>{ stopAll(); audioA.play(); };
+    playBBtn.onclick = ()=>{ stopAll(); audioB.play(); };
+
+    chooseABtn.onclick = ()=> handleChoice('A');
+    chooseBBtn.onclick = ()=> handleChoice('B');
+
+    function handleChoice(choice){
+      const tr = trials[current];
+      if(choice===tr.correct) correctCount++;
+      responses.push({
+        Aidx: tr.Aidx, Bidx: tr.Bidx,
+        X: tr.correct, choice
+      });
+      current++;
+      if(current<nTrials) loadTrial();
+      else {
+        trialBox.style.display = 'none';
+        feedbackBox.style.display = 'block';
+      }
+    }
+
+    // —— 3. 收集反馈 + 生成下载 —— 
+    feedbackBtn.onclick = () => {
+      // 难度选项
+      const diff = document.querySelector('input[name="difficulty"]:checked');
+      if(!diff){ alert('请选择难度'); return; }
+      participantInfo.difficulty = diff.value;
+      participantInfo.comment = commentBox.value.trim();
+      // 构造 TXT 内容
+      const lines = [];
+      lines.push(
+        `Name: ${participantInfo.name}\t`+
+        `Age: ${participantInfo.age}\t`+
+        `Exp: ${participantInfo.exp}\t`+
+        `Difficulty: ${participantInfo.difficulty}\t`+
+        `Comment: ${participantInfo.comment||'—'}`
+      );
+      responses.forEach(r => {
+        lines.push(
+          `A:${r.Aidx}\tB:${r.Bidx}\tX:${r.X}\tChoice:${r.choice}`
+        );
+      });
+      lines.push(
+        `Accuracy: ${correctCount}/${nTrials} (${(correctCount/nTrials*100).toFixed(1)}%)`
+      );
+
+      // 生成文件名：姓名_分_时_日_月_年
+      const now = new Date();
+      const p = participantInfo.name.replace(/[^\w\u4e00-\u9fa5]/g,'');
+      const fn = [
+        p,
+        now.getMinutes().toString().padStart(2,'0'),
+        now.getHours().toString().padStart(2,'0'),
+        now.getDate().toString().padStart(2,'0'),
+        (now.getMonth()+1).toString().padStart(2,'0'),
+        now.getFullYear()
+      ].join('_') + '.txt';
+
+      // 创建 Blob + 下载链接
+      const blob = new Blob([lines.join('\n')], { type:'text/plain' });
+      downloadLink.href = URL.createObjectURL(blob);
+      downloadLink.download = fn;
+
+      feedbackBox.style.display = 'none';
+      downloadBox.style.display = 'block';
+      document.getElementById('send-email').style.display = 'block';
+    };
+  </script>
+
+</body>
+</html>
